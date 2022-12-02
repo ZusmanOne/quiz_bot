@@ -1,6 +1,4 @@
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 from environs import Env
-import telegram
 import redis
 import random
 from telegram import (ReplyKeyboardMarkup, ReplyKeyboardRemove)
