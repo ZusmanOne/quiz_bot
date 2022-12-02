@@ -3,6 +3,10 @@ from environs import Env
 import telegram
 import redis
 import random
+from telegram import (ReplyKeyboardMarkup, ReplyKeyboardRemove)
+from telegram.ext import (Updater, CommandHandler, MessageHandler, Filters, RegexHandler,
+                          ConversationHandler)
+
 
 env = Env()
 env.read_env()
@@ -13,38 +17,75 @@ r = redis.StrictRedis(host=env('REDIS_HOST'),
                       decode_responses=True,
                       db=0)
 
-
-def start(bot,update):
-    custom_keyboards = [['Новый вопрос', 'Сдаться'],
-                        ['Мой счет']]
-    reply_markup = telegram.ReplyKeyboardMarkup(custom_keyboards)
-    bot = telegram.Bot(env('TG_TOKEN'))
-    bot.send_message(text='Привет! Давай начнем нашу викторину!', chat_id=env('TG_ID'), reply_markup=reply_markup)
+QUESTION, ANSWER, SKIP = range(3)
 
 
-def echo(bot, update):
-    """Echo the user message."""
-    update.message.reply_text(update.message.text)
-    print(update.message.text=='ds')
+def start(bot, update):
+    reply_keyboard = [['Новый вопрос', 'Завершить'],
+                      ['Мой счет']]
+    update.message.reply_text(
+        'Привет! Я бот, который любит викторины. Сыграем?\n Жми Кнопку "Новый вопрос!"',
+        reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True))
+
+    return QUESTION
 
 
-def send_questions(bot, update):
-    if update.message.text == 'Новый вопрос':
-        random_answer = random.choice(list(answer_question))
-        r.set(env("TG_ID"), random_answer)
-        update.message.reply_text(r.get(env('TG_ID')))
-    elif update.message.text in answer_question[r.get(env('TG_ID'))]:
-        update.message.reply_text('Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос»')
-    else:
-        update.message.reply_text('Неправильно… Попробуешь ещё раз?')
+def handle_new_question_request(bot, update):
+    user = update.message.from_user
+    random_answer = random.choice(list(answer_question))
+    r.set(env("TG_ID"), random_answer)
+    update.message.reply_text(r.get(env('TG_ID')),reply_markup=ReplyKeyboardRemove())
+    return ANSWER
 
+
+def handle_solution_attempt(bot,update):
+    reply_keyboard = [['Новый вопрос', 'Завершить'],
+                      ['Мой счет']]
+    user = update.message.from_user
+    if update.message.text in answer_question[r.get(env('TG_ID'))]:
+        update.message.reply_text('Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос»',
+                                  reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True))
+        return QUESTION
+    if update.message.text == 'Сдаться':
+        return SKIP
+    reply_keyboards = [['Новый вопрос', 'Сдаться']]
+    update.message.reply_text('Неправильно… Попробуешь ещё раз?\n',
+                              reply_markup=ReplyKeyboardMarkup(reply_keyboards, one_time_keyboard=True))
+    return ANSWER
+
+
+def skip_question(bot, update):
+    user = update.message.from_user
+    update.message.reply_text(answer_question[r.get(env('TG_ID'))])
+    new_answer = random.choice(list(answer_question))
+    r.set(env("TG_ID"), new_answer)
+    update.message.reply_text(r.get(env('TG_ID')))
+    return ANSWER
+
+
+def cancel(bot, update):
+    user = update.message.from_user
+    update.message.reply_text('Приходи в следующий раз!!',
+                              reply_markup=ReplyKeyboardRemove())
+
+    return ConversationHandler.END
 
 
 def main():
     updater = Updater(env('TG_TOKEN'))
     dp = updater.dispatcher
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.text, send_questions))
+    updater.start_polling()
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler('start', start)],
+        states={
+            QUESTION: [RegexHandler('^(Новый вопрос)$', handle_new_question_request),
+                       RegexHandler('Завершить', cancel)],
+            ANSWER: [RegexHandler('^(Сдаться)$', skip_question),
+                     MessageHandler(Filters.text, handle_solution_attempt),
+                     ]
+        },
+        fallbacks=[CommandHandler('Завершить', cancel)])
+    dp.add_handler(conv_handler)
     updater.start_polling()
 
 
