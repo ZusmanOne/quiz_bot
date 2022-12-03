@@ -1,10 +1,14 @@
 from environs import Env
+import logging
 import redis
 import random
 from telegram import (ReplyKeyboardMarkup, ReplyKeyboardRemove)
 from telegram.ext import (Updater, CommandHandler, MessageHandler, Filters, RegexHandler,
                           ConversationHandler)
 
+
+
+logger = logging.getLogger(__file__)
 
 env = Env()
 env.read_env()
