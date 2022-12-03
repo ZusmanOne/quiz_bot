@@ -1,4 +1,4 @@
-APScheduler==3.6.3
 environs==9.5.0
 python-telegram-bot==11.1.0
 vk-api==11.9.9
+redis==4.3.5

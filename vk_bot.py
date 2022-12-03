@@ -3,7 +3,13 @@ import vk_api as vk
 from vk_api.longpoll import VkLongPoll, VkEventType
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 from environs import Env
-from main import r
+from tg_bot import r
+import logging
+from handler_log import TelegramLogsHandler
+
+
+
+logger = logging.getLogger(__name__)
 
 env = Env()
 env.read_env()
@@ -13,6 +19,7 @@ def start(event, vk_api):
     keyboard = VkKeyboard(one_time=True)
     keyboard.add_button('Новый вопрос', color=VkKeyboardColor.POSITIVE)
     keyboard.add_button('Завершить', color=VkKeyboardColor.NEGATIVE)
+    logger.info('Бот запущен')
     vk_api.messages.send(
         user_id=event.user_id,
         message="Привет! Я бот, который любит викторины. Сыграем?\n Жми Кнопку Новый вопрос!",
@@ -90,6 +97,12 @@ def handle_answer_request(event, vk_api):
 
 
 if __name__ == "__main__":
+    vk_session = vk.VkApi(token=env('VK_ID'))
+    vk_api = vk_session.get_api()
+    tg_token = env('TG_TOKEN')
+    chat_id = env('TG_ID')
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(TelegramLogsHandler(tg_token,chat_id))
     with open('quiz.txt', encoding='KOI8-R') as file:
         quiz = file.read()
     split_quiz = quiz.split('\n\n')
@@ -100,19 +113,22 @@ if __name__ == "__main__":
         if 'Ответ' in phrase:
             answer = phrase.strip()
             answer_question[question] = answer
-    vk_session = vk.VkApi(token=env('VK_ID'))
-    vk_api = vk_session.get_api()
     longpoll = VkLongPoll(vk_session)
     for event in longpoll.listen():
-        if event.type == VkEventType.MESSAGE_NEW and event.to_me:
-            if event.text == 'Начать':
-                start(event, vk_api)
-            elif event.text == 'Завершить':
-                cancel_quiz(event,vk_api)
-            elif event.text == 'Новый вопрос':
-                send_question(event, vk_api)
-            elif event.text == 'Сдаться':
-                send_answer(event, vk_api)
-            else:
-                handle_answer_request(event, vk_api)
+        try:
+            if event.type == VkEventType.MESSAGE_NEW and event.to_me:
+                if event.text == 'Начать':
+                    start(event, vk_api)
+                elif event.text == 'Завершить':
+                    cancel_quiz(event,vk_api)
+                elif event.text == 'Новый вопрос':
+                    send_question(event, vk_api)
+                elif event.text == 'Сдаться':
+                    send_answer(event, vk_api)
+                else:
+                    handle_answer_request(event, vk_api)
+        except ConnectionError:
+            logger.error('Connection terminated')
+        except Exception as err:
+            logger.error('Что пошло не так')
 

@@ -5,10 +5,12 @@ import random
 from telegram import (ReplyKeyboardMarkup, ReplyKeyboardRemove)
 from telegram.ext import (Updater, CommandHandler, MessageHandler, Filters, RegexHandler,
                           ConversationHandler)
+from handler_log import TelegramLogsHandler
 
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    level=logging.INFO)
 
-
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 env = Env()
 env.read_env()
@@ -25,6 +27,7 @@ QUESTION, ANSWER, SKIP = range(3)
 def start(bot, update):
     reply_keyboard = [['Новый вопрос', 'Завершить'],
                       ['Мой счет']]
+    logger.info('Бот запущен')
     update.message.reply_text(
         'Привет! Я бот, который любит викторины. Сыграем?\n Жми Кнопку "Новый вопрос!"',
         reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True))
@@ -33,7 +36,6 @@ def start(bot, update):
 
 
 def handle_new_question_request(bot, update):
-    user = update.message.from_user
     random_answer = random.choice(list(answer_question))
     r.set(env("TG_ID"), random_answer)
     update.message.reply_text(r.get(env('TG_ID')),reply_markup=ReplyKeyboardRemove())
@@ -43,7 +45,6 @@ def handle_new_question_request(bot, update):
 def handle_solution_attempt(bot,update):
     reply_keyboard = [['Новый вопрос', 'Завершить'],
                       ['Мой счет']]
-    user = update.message.from_user
     if update.message.text in answer_question[r.get(env('TG_ID'))]:
         update.message.reply_text('Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос»',
                                   reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True))
@@ -57,7 +58,6 @@ def handle_solution_attempt(bot,update):
 
 
 def skip_question(bot, update):
-    user = update.message.from_user
     update.message.reply_text(answer_question[r.get(env('TG_ID'))])
     new_answer = random.choice(list(answer_question))
     r.set(env("TG_ID"), new_answer)
@@ -66,17 +66,24 @@ def skip_question(bot, update):
 
 
 def cancel(bot, update):
-    user = update.message.from_user
     update.message.reply_text('Приходи в следующий раз!!',
                               reply_markup=ReplyKeyboardRemove())
 
     return ConversationHandler.END
 
 
+def error(bot, update, error):
+    logger.warning(f"Возникла ошибка- {error} в {update}")
+
+
 def main():
-    updater = Updater(env('TG_TOKEN'))
+    tg_token = env('TG_TOKEN')
+    chat_id = env('TG_ID')
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(TelegramLogsHandler(tg_token,chat_id))
+    updater = Updater(tg_token)
     dp = updater.dispatcher
-    updater.start_polling()
+
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
@@ -88,7 +95,9 @@ def main():
         },
         fallbacks=[CommandHandler('Завершить', cancel)])
     dp.add_handler(conv_handler)
+    dp.add_error_handler(error)
     updater.start_polling()
+    updater.idle()
 
 
 if __name__ == '__main__':
@@ -97,9 +106,12 @@ if __name__ == '__main__':
     split_quiz = quiz.split('\n\n')
     answer_question = {}
     for phrase in split_quiz:
-        if 'Вопрос' in phrase:
-            question = phrase.strip()
-        if 'Ответ' in phrase:
-            answer = phrase.strip()
-            answer_question[question] = answer
+        try:
+            if 'Вопрос' in phrase:
+                question = phrase.strip()
+            if 'Ответ' in phrase:
+                answer = phrase.strip()
+                answer_question[question] = answer
+        except Exception:
+            logger.exception('Что то пошло не так')
     main()
