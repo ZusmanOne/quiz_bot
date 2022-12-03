@@ -8,7 +8,6 @@ import logging
 from handler_log import TelegramLogsHandler
 
 
-
 logger = logging.getLogger(__name__)
 
 env = Env()
@@ -102,7 +101,7 @@ if __name__ == "__main__":
     tg_token = env('TG_TOKEN')
     chat_id = env('TG_ID')
     logger.setLevel(logging.DEBUG)
-    logger.addHandler(TelegramLogsHandler(tg_token,chat_id))
+    logger.addHandler(TelegramLogsHandler(tg_token, chat_id))
     with open('quiz.txt', encoding='KOI8-R') as file:
         quiz = file.read()
     split_quiz = quiz.split('\n\n')
@@ -120,7 +119,7 @@ if __name__ == "__main__":
                 if event.text == 'Начать':
                     start(event, vk_api)
                 elif event.text == 'Завершить':
-                    cancel_quiz(event,vk_api)
+                    cancel_quiz(event, vk_api)
                 elif event.text == 'Новый вопрос':
                     send_question(event, vk_api)
                 elif event.text == 'Сдаться':
@@ -129,6 +128,6 @@ if __name__ == "__main__":
                     handle_answer_request(event, vk_api)
         except ConnectionError:
             logger.error('Connection terminated')
-        except Exception as err:
+        except Exception:
             logger.error('Что пошло не так')
 

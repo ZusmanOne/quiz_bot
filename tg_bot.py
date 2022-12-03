@@ -38,11 +38,11 @@ def start(bot, update):
 def handle_new_question_request(bot, update):
     random_answer = random.choice(list(answer_question))
     r.set(env("TG_ID"), random_answer)
-    update.message.reply_text(r.get(env('TG_ID')),reply_markup=ReplyKeyboardRemove())
+    update.message.reply_text(r.get(env('TG_ID')), reply_markup=ReplyKeyboardRemove())
     return ANSWER
 
 
-def handle_solution_attempt(bot,update):
+def handle_solution_attempt(bot, update):
     reply_keyboard = [['Новый вопрос', 'Завершить'],
                       ['Мой счет']]
     if update.message.text in answer_question[r.get(env('TG_ID'))]:
@@ -80,7 +80,7 @@ def main():
     tg_token = env('TG_TOKEN')
     chat_id = env('TG_ID')
     logger.setLevel(logging.DEBUG)
-    logger.addHandler(TelegramLogsHandler(tg_token,chat_id))
+    logger.addHandler(TelegramLogsHandler(tg_token, chat_id))
     updater = Updater(tg_token)
     dp = updater.dispatcher
 
