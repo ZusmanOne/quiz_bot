@@ -6,18 +6,11 @@ from telegram import (ReplyKeyboardMarkup, ReplyKeyboardRemove)
 from telegram.ext import (Updater, CommandHandler, MessageHandler, Filters, RegexHandler,
                           ConversationHandler)
 from handler_log import TelegramLogsHandler
+from generate_quiz import create_quiz
 
 
 logger = logging.getLogger(__name__)
 
-env = Env()
-env.read_env()
-r = redis.StrictRedis(host=env('REDIS_HOST'),
-                      port=env('REDIS_PORT'),
-                      password=env('REDIS_PASSWORD'),
-                      charset="utf-8",
-                      decode_responses=True,
-                      db=0)
 
 QUESTION, ANSWER, SKIP = range(3)
 
@@ -34,6 +27,7 @@ def start(bot, update):
 
 
 def handle_new_question_request(bot, update):
+    answer_question = create_quiz()
     random_answer = random.choice(list(answer_question))
     r.set(env("TG_ID"), random_answer)
     update.message.reply_text(r.get(env('TG_ID')), reply_markup=ReplyKeyboardRemove())
@@ -41,6 +35,7 @@ def handle_new_question_request(bot, update):
 
 
 def handle_solution_attempt(bot, update):
+    answer_question = create_quiz()
     reply_keyboard = [['Новый вопрос', 'Завершить'],
                       ['Мой счет']]
     if update.message.text in answer_question[r.get(env('TG_ID'))]:
@@ -56,6 +51,7 @@ def handle_solution_attempt(bot, update):
 
 
 def skip_question(bot, update):
+    answer_question = create_quiz()
     update.message.reply_text(answer_question[r.get(env('TG_ID'))])
     new_answer = random.choice(list(answer_question))
     r.set(env("TG_ID"), new_answer)
@@ -82,6 +78,7 @@ def main():
     updater = Updater(tg_token)
     dp = updater.dispatcher
 
+
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
@@ -99,17 +96,12 @@ def main():
 
 
 if __name__ == '__main__':
-    with open('quiz.txt', encoding='KOI8-R') as file:
-        quiz = file.read()
-    split_quiz = quiz.split('\n\n')
-    answer_question = {}
-    for phrase in split_quiz:
-        try:
-            if 'Вопрос' in phrase:
-                question = phrase.strip()
-            if 'Ответ' in phrase:
-                answer = phrase.strip()
-                answer_question[question] = answer
-        except Exception:
-            logger.exception('Что то пошло не так')
+    env = Env()
+    env.read_env()
+    r = redis.StrictRedis(host=env('REDIS_HOST'),
+                          port=env('REDIS_PORT'),
+                          password=env('REDIS_PASSWORD'),
+                          charset="utf-8",
+                          decode_responses=True,
+                          db=0)
     main()

@@ -3,15 +3,12 @@ import vk_api as vk
 from vk_api.longpoll import VkLongPoll, VkEventType
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 from environs import Env
-from tg_bot import r
+import redis
 import logging
 from handler_log import TelegramLogsHandler
-
+from generate_quiz import create_quiz
 
 logger = logging.getLogger(__name__)
-
-env = Env()
-env.read_env()
 
 
 def start(event, vk_api):
@@ -38,7 +35,7 @@ def cancel_quiz(event, vk_api):
     )
 
 
-def send_question(event, vk_api):
+def send_question(event, vk_api,answer_question):
     keyboard = VkKeyboard(one_time=True)
     keyboard.add_button('Сдаться', color=VkKeyboardColor.PRIMARY)
     random_answer = random.choice(list(answer_question))
@@ -51,7 +48,7 @@ def send_question(event, vk_api):
     )
 
 
-def send_answer(event, vk_api):
+def send_answer(event, vk_api,answer_question):
     keyboard = VkKeyboard(one_time=True)
     keyboard.add_button('Сдаться', color=VkKeyboardColor.PRIMARY)
     keyboard.add_button('Завершить', color=VkKeyboardColor.NEGATIVE)
@@ -70,7 +67,7 @@ def send_answer(event, vk_api):
     )
 
 
-def handle_answer_request(event, vk_api):
+def handle_answer_request(event, vk_api,answer_question):
     keyboard = VkKeyboard(one_time=True)
     keyboard.add_button('Новый вопрос', color=VkKeyboardColor.POSITIVE)
     if event.text in answer_question[r.get(event.user_id)]:
@@ -95,39 +92,41 @@ def handle_answer_request(event, vk_api):
         )
 
 
-if __name__ == "__main__":
+def main():
     vk_session = vk.VkApi(token=env('VK_ID'))
     vk_api = vk_session.get_api()
     tg_token = env('TG_TOKEN')
     chat_id = env('TG_ID')
+    answer_question = create_quiz()
     logger.setLevel(logging.DEBUG)
     logger.addHandler(TelegramLogsHandler(tg_token, chat_id))
-    with open('quiz.txt', encoding='KOI8-R') as file:
-        quiz = file.read()
-    split_quiz = quiz.split('\n\n')
-    answer_question = {}
-    for phrase in split_quiz:
-        if 'Вопрос' in phrase:
-            question = phrase.strip()
-        if 'Ответ' in phrase:
-            answer = phrase.strip()
-            answer_question[question] = answer
     longpoll = VkLongPoll(vk_session)
     for event in longpoll.listen():
         try:
             if event.type == VkEventType.MESSAGE_NEW and event.to_me:
                 if event.text == 'Начать':
-                    start(event, vk_api)
+                    start(event,vk_api)
                 elif event.text == 'Завершить':
                     cancel_quiz(event, vk_api)
                 elif event.text == 'Новый вопрос':
-                    send_question(event, vk_api)
+                    send_question(event, vk_api,answer_question)
                 elif event.text == 'Сдаться':
-                    send_answer(event, vk_api)
+                    send_answer(event, vk_api,answer_question)
                 else:
-                    handle_answer_request(event, vk_api)
+                    handle_answer_request(event, vk_api,answer_question)
         except ConnectionError:
             logger.error('Connection terminated')
         except Exception:
             logger.error('Что пошло не так')
 
+
+if __name__ == "__main__":
+    env = Env()
+    env.read_env()
+    r = redis.StrictRedis(host=env('REDIS_HOST'),
+                          port=env('REDIS_PORT'),
+                          password=env('REDIS_PASSWORD'),
+                          charset="utf-8",
+                          decode_responses=True,
+                          db=0)
+    main()
