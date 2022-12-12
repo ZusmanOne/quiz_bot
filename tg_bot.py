@@ -26,19 +26,20 @@ def start(bot, update):
     return QUESTION
 
 
-def handle_new_question_request(bot, update):
+def handle_new_question_request(bot, update,r,chat_id):
+    print(r,chat_id)
     answer_question = create_quiz()
     random_answer = random.choice(list(answer_question))
-    r.set(env("TG_ID"), random_answer)
-    update.message.reply_text(r.get(env('TG_ID')), reply_markup=ReplyKeyboardRemove())
+    r.set((chat_id), random_answer)
+    update.message.reply_text(r.get(chat_id), reply_markup=ReplyKeyboardRemove())
     return ANSWER
 
 
-def handle_solution_attempt(bot, update):
+def handle_solution_attempt(bot, update,r,chat_id):
     answer_question = create_quiz()
     reply_keyboard = [['Новый вопрос', 'Завершить'],
                       ['Мой счет']]
-    if update.message.text in answer_question[r.get(env('TG_ID'))]:
+    if update.message.text in answer_question[r.get(chat_id)]:
         update.message.reply_text('Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос»',
                                   reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True))
         return QUESTION
@@ -50,12 +51,12 @@ def handle_solution_attempt(bot, update):
     return ANSWER
 
 
-def skip_question(bot, update):
+def skip_question(bot, update,r,chat_id):
     answer_question = create_quiz()
-    update.message.reply_text(answer_question[r.get(env('TG_ID'))])
+    update.message.reply_text(answer_question[r.get(chat_id)])
     new_answer = random.choice(list(answer_question))
-    r.set(env("TG_ID"), new_answer)
-    update.message.reply_text(r.get(env('TG_ID')))
+    r.set(chat_id, new_answer)
+    update.message.reply_text(r.get(chat_id))
     return ANSWER
 
 
@@ -71,21 +72,30 @@ def error(bot, update, error):
 
 
 def main():
+    env = Env()
+    env.read_env()
+    r = redis.StrictRedis(host=env('REDIS_HOST'),
+                          port=env('REDIS_PORT'),
+                          password=env('REDIS_PASSWORD'),
+                          charset="utf-8",
+                          decode_responses=True,
+                          db=0)
     tg_token = env('TG_TOKEN')
     chat_id = env('TG_ID')
     logger.setLevel(logging.DEBUG)
     logger.addHandler(TelegramLogsHandler(tg_token, chat_id))
     updater = Updater(tg_token)
     dp = updater.dispatcher
-
-
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
-            QUESTION: [RegexHandler('^(Новый вопрос)$', handle_new_question_request),
+            QUESTION: [RegexHandler('^(Новый вопрос)$',
+                                    callback=lambda bot, update,*args:handle_new_question_request(bot, update, r, chat_id)),
                        RegexHandler('Завершить', cancel)],
-            ANSWER: [RegexHandler('^(Сдаться)$', skip_question),
-                     MessageHandler(Filters.text, handle_solution_attempt),
+            ANSWER: [RegexHandler('^(Сдаться)$',
+                                  callback=lambda bot, update, *args:skip_question(bot, update, r, chat_id)),
+                     MessageHandler(Filters.text,
+                                    callback=lambda bot, update, *args: handle_solution_attempt(bot, update, r, chat_id)),
                      ]
         },
         fallbacks=[CommandHandler('Завершить', cancel)])
@@ -96,12 +106,5 @@ def main():
 
 
 if __name__ == '__main__':
-    env = Env()
-    env.read_env()
-    r = redis.StrictRedis(host=env('REDIS_HOST'),
-                          port=env('REDIS_PORT'),
-                          password=env('REDIS_PASSWORD'),
-                          charset="utf-8",
-                          decode_responses=True,
-                          db=0)
+
     main()
