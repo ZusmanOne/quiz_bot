@@ -26,8 +26,7 @@ def start(bot, update):
     return QUESTION
 
 
-def handle_new_question_request(bot, update,r,chat_id):
-    print(r,chat_id)
+def handle_new_question_request(bot, update, r, chat_id):
     answer_question = create_quiz()
     random_answer = random.choice(list(answer_question))
     r.set((chat_id), random_answer)
