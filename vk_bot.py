@@ -35,7 +35,7 @@ def cancel_quiz(event, vk_api):
     )
 
 
-def send_question(event, vk_api,answer_question):
+def send_question(event, vk_api,answer_question,r):
     keyboard = VkKeyboard(one_time=True)
     keyboard.add_button('Сдаться', color=VkKeyboardColor.PRIMARY)
     random_answer = random.choice(list(answer_question))
@@ -48,7 +48,7 @@ def send_question(event, vk_api,answer_question):
     )
 
 
-def send_answer(event, vk_api,answer_question):
+def send_answer(event, vk_api,answer_question,r):
     keyboard = VkKeyboard(one_time=True)
     keyboard.add_button('Сдаться', color=VkKeyboardColor.PRIMARY)
     keyboard.add_button('Завершить', color=VkKeyboardColor.NEGATIVE)
@@ -67,7 +67,7 @@ def send_answer(event, vk_api,answer_question):
     )
 
 
-def handle_answer_request(event, vk_api,answer_question):
+def handle_answer_request(event, vk_api,answer_question,r):
     keyboard = VkKeyboard(one_time=True)
     keyboard.add_button('Новый вопрос', color=VkKeyboardColor.POSITIVE)
     if event.text in answer_question[r.get(event.user_id)]:
@@ -93,6 +93,14 @@ def handle_answer_request(event, vk_api,answer_question):
 
 
 def main():
+    env = Env()
+    env.read_env()
+    r = redis.StrictRedis(host=env('REDIS_HOST'),
+                          port=env('REDIS_PORT'),
+                          password=env('REDIS_PASSWORD'),
+                          charset="utf-8",
+                          decode_responses=True,
+                          db=0)
     vk_session = vk.VkApi(token=env('VK_ID'))
     vk_api = vk_session.get_api()
     tg_token = env('TG_TOKEN')
@@ -109,11 +117,11 @@ def main():
                 elif event.text == 'Завершить':
                     cancel_quiz(event, vk_api)
                 elif event.text == 'Новый вопрос':
-                    send_question(event, vk_api,answer_question)
+                    send_question(event, vk_api,answer_question,r)
                 elif event.text == 'Сдаться':
-                    send_answer(event, vk_api,answer_question)
+                    send_answer(event, vk_api,answer_question,r)
                 else:
-                    handle_answer_request(event, vk_api,answer_question)
+                    handle_answer_request(event, vk_api,answer_question,r)
         except ConnectionError:
             logger.error('Connection terminated')
         except Exception:
@@ -121,12 +129,5 @@ def main():
 
 
 if __name__ == "__main__":
-    env = Env()
-    env.read_env()
-    r = redis.StrictRedis(host=env('REDIS_HOST'),
-                          port=env('REDIS_PORT'),
-                          password=env('REDIS_PASSWORD'),
-                          charset="utf-8",
-                          decode_responses=True,
-                          db=0)
+
     main()
